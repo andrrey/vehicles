@@ -7,6 +7,8 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 
+import java.util.Random;
+
 @SpringBootApplication
 public class VehiclesApplication {
 	private static final Logger log = LoggerFactory.getLogger(VehiclesApplication.class);
@@ -17,8 +19,15 @@ public class VehiclesApplication {
 
 	@Bean
 	public CommandLineRunner task(VehiclesRepo repo){
+		Random rnd = new Random();
+		VehicleType vehicleTypes[] = VehicleType.values();
+
 		return args -> {
-			repo.save(new Vehicle(VehicleType.Car));
+			for(int i=0; i<1000; i++){
+				VehicleType type = vehicleTypes[rnd.nextInt(vehicleTypes.length)];
+				repo.save(new Vehicle(type));
+			}
+
 
 			log.info("Database:");
 			for(Vehicle vehicle: repo.findAll()){
