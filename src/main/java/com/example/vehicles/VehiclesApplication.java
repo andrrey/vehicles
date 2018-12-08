@@ -20,14 +20,13 @@ public class VehiclesApplication {
 	@Bean
 	public CommandLineRunner task(VehiclesRepo repo){
 		Random rnd = new Random();
-		VehicleType vehicleTypes[] = VehicleType.values();
+		VehicleType vehicleTypes[] = {VehicleType.Bus, VehicleType.Car, VehicleType.Truck};
 
 		return args -> {
 			for(int i=0; i<1000; i++){
 				VehicleType type = vehicleTypes[rnd.nextInt(vehicleTypes.length)];
 				repo.save(new Vehicle(type));
 			}
-
 
 			log.info("Database:");
 			for(Vehicle vehicle: repo.findAll()){
