@@ -1,16 +1,30 @@
 package com.example.vehicles;
 
-import com.sun.javaws.exceptions.ErrorCodeResponseException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.config.ConfigurableBeanFactory;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
+import org.springframework.context.annotation.Scope;
+import org.springframework.jms.annotation.JmsListener;
+import org.springframework.jms.core.JmsTemplate;
+import org.springframework.stereotype.Component;
 
-import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.GenerationType;
-import javax.persistence.Id;
+import javax.persistence.*;
 import java.util.Random;
 
+import static com.example.vehicles.VehiclesApplication.MAX_VEHICLES;
+
+@Component
+@Scope(scopeName = ConfigurableBeanFactory.SCOPE_PROTOTYPE)
 @Entity
-public class Vehicle {
+public class Vehicle implements ApplicationContextAware {
+    private static final Logger log = LoggerFactory.getLogger(Vehicle.class);
     protected static final Random rnd = new Random();
+    private static final VehicleType vehicleTypes[] = VehicleType.values();
+    @Transient
+    private ApplicationContext ctx;
 
     @Id
     @GeneratedValue(strategy= GenerationType.AUTO)
@@ -21,9 +35,7 @@ public class Vehicle {
     private float fullTank;
 
     protected Vehicle(){
-        this.type = VehicleType.None;
-        this.consumption5s = 0f;
-        this.fullTank = 0f;
+        this(vehicleTypes[rnd.nextInt(vehicleTypes.length)]);
     }
 
     public Vehicle(VehicleType type) {
@@ -43,10 +55,11 @@ public class Vehicle {
                 this.consumption5s = 0.7f;
                 this.fullTank = 130f;
                 break;
-            case None:
             default:
                 throw new Error("I didn't expect that");
         }
+
+        this.fuelLevel = this.fullTank;
     }
 
     public float getFuelLevel() {
@@ -80,7 +93,30 @@ public class Vehicle {
     }
 
     public void onAlert(){
+        log.info("Alert in " + toString());
         this.fullTank = this.fullTank * 0.97f;
+    }
+
+    public void onIncident() {
+        log.info("Incident in " + toString());
+        this.fuelLevel = 0;
+    }
+
+    public void onMove(){
+        log.info("Moving " + toString());
+        Event e = drive();
+        if(e != Event.Move){
+            log.info("Happened: " + e.toString());
+            if(e == Event.Incident) onIncident();
+            sendMessage(e);
+        }
+    }
+
+    void sendMessage(Event e){
+        Msg m = new Msg(e, this.id, 0);
+        if(e == Event.Incident) m.setCollisionId(rnd.nextInt(MAX_VEHICLES));
+        JmsTemplate jmsTemplate = ctx.getBean(JmsTemplate.class);
+        jmsTemplate.convertAndSend("systemQ", m);
     }
 
     @Override
@@ -92,5 +128,26 @@ public class Vehicle {
                 ", consumption5s=" + consumption5s +
                 ", fullTank=" + fullTank +
                 '}';
+    }
+
+    @JmsListener(destination = "topic", containerFactory = "myFactory")
+    public void listen(Msg msg){
+        log.info("I am " + toString() + " and I got event: " + msg.toString());
+        switch (msg.getEvent()){
+            case Move:
+                onMove(); break;
+            case Alert:
+                if(msg.getType() == type) onAlert();
+                break;
+            case Incident:
+                if(msg.getCollisionId() == id) onIncident();
+                break;
+            default: throw new Error("Whaaaat?!");
+        }
+    }
+
+    @Override
+    public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+        this.ctx = applicationContext;
     }
 }
