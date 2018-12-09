@@ -3,6 +3,7 @@ package com.example.vehicles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
@@ -25,6 +26,9 @@ public class Vehicle implements ApplicationContextAware {
     private static final VehicleType vehicleTypes[] = VehicleType.values();
     @Transient
     private ApplicationContext ctx;
+    @Transient
+    @Autowired
+    JmsTemplate jmsTemplate;
 
     @Id
     @GeneratedValue(strategy= GenerationType.AUTO)
@@ -115,8 +119,8 @@ public class Vehicle implements ApplicationContextAware {
     void sendMessage(Event e){
         Msg m = new Msg(e, this.id, 0);
         if(e == Event.Incident) m.setCollisionId(rnd.nextInt(MAX_VEHICLES));
-        JmsTemplate jmsTemplate = ctx.getBean(JmsTemplate.class);
-        jmsTemplate.convertAndSend("systemQ", m);
+        JmsTemplate topicTemplate = jmsTemplate; //ctx.getBean("myQueueTemplate", JmsTemplate.class);
+        topicTemplate.convertAndSend("systemQ", m);
     }
 
     @Override

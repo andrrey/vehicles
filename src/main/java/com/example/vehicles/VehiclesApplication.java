@@ -1,5 +1,6 @@
 package com.example.vehicles;
 
+import org.apache.activemq.ActiveMQConnectionFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
@@ -32,6 +33,30 @@ public class VehiclesApplication implements ApplicationContextAware {
 		SpringApplication.run(VehiclesApplication.class, args);
 	}
 
+//	@Bean
+//	public ConnectionFactory connectionFactory(){
+//		ActiveMQConnectionFactory connectionFactory = new ActiveMQConnectionFactory();
+//		connectionFactory.setBrokerURL("vm://localhost");
+//		return connectionFactory;
+//	}
+
+//	@Bean
+//	public JmsTemplate myTopicTemplate(){
+//		JmsTemplate template = new JmsTemplate();
+//		template.setConnectionFactory(connectionFactory());
+//		template.setPubSubDomain(true);
+//		template.setDefaultDestinationName("topic");
+//		return template;
+//	}
+//
+//	@Bean
+//	public JmsTemplate myQueueTemplate(){
+//		JmsTemplate template = new JmsTemplate();
+//		template.setConnectionFactory(connectionFactory());
+//		template.setDefaultDestinationName("systemQ");
+//		return template;
+//	}
+
 	@Bean
 	public JmsListenerContainerFactory<?> myFactory(ConnectionFactory connectionFactory,
 													DefaultJmsListenerContainerFactoryConfigurer configurer) {
@@ -43,7 +68,6 @@ public class VehiclesApplication implements ApplicationContextAware {
 
 	@Bean
 	public CommandLineRunner task(VehiclesRepo repo){
-
 		return args -> {
 			for(int i=0; i <MAX_VEHICLES; i++){
 				repo.save(ctx.getBean(Vehicle.class)); //beans will be created automatically, as they have prototype scope
@@ -55,8 +79,9 @@ public class VehiclesApplication implements ApplicationContextAware {
 			}
 
 			//jmsTemplate.setPubSubDomain(true);
-			jmsTemplate.convertAndSend("topic", new Msg(Event.Move, -1, 0));
-			jmsTemplate.convertAndSend("topic", new Msg(Event.Move, -1, 0));
+			JmsTemplate tTemplate = jmsTemplate; //ctx.getBean("myTopicTemplate", JmsTemplate.class);
+			tTemplate.convertAndSend("topic", new Msg(Event.Move, -1, 0));
+			tTemplate.convertAndSend("topic", new Msg(Event.Move, -1, 0));
 		};
 	}
 
@@ -68,13 +93,14 @@ public class VehiclesApplication implements ApplicationContextAware {
 	@JmsListener(destination = "systemQ", containerFactory = "myFactory")
 	public void listen(Msg msg){
 		log.info("System got event: " + msg.toString());
+		JmsTemplate tTemplate = jmsTemplate; //ctx.getBean("myTopicTemplate", JmsTemplate.class);
 		if(msg.getEvent() == Event.Incident){
-			jmsTemplate.convertAndSend("topic",
+			tTemplate.convertAndSend("topic",
 					new Msg(Event.Incident, msg.getCollisionId(), msg.getVehicleId()));
 		}
 
 		if(msg.getEvent() == Event.Alert){
-			jmsTemplate.convertAndSend("topic", new Msg(Event.Alert, msg.getType()));
+			tTemplate.convertAndSend("topic", new Msg(Event.Alert, msg.getType()));
 		}
 	}
 }
